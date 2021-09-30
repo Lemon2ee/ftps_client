@@ -87,7 +87,7 @@ if operation not in list_of_operation:
 #######################################################################################################################
 # create socket
 control = socket.socket()
-control.settimeout(60)
+control.settimeout(20)
 control.connect((args_host, args_port))
 socket_creation = control.recv(8192)
 code_check(socket_creation)
@@ -187,7 +187,7 @@ def open_data(message, opt):
     control.sendall(message.encode())
     data = socket.socket()
     data = ssl.wrap_socket(data)
-    data.settimeout(60)
+    data.settimeout(20)
     data.connect((pasv_ip, pasv_port))
 
     save_message = control.recv(8192)
