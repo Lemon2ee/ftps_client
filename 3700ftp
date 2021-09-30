@@ -1,0 +1,258 @@
+#!/usr/bin/python3
+
+import argparse
+import socket
+import ssl
+import os
+from ast import literal_eval
+from urllib.parse import urlparse
+
+#######################################################################################################################
+# description
+parser = argparse.ArgumentParser(description="FTPS client for listing, copying, moving, and deleting files and "
+                                             "directories on remote FTPS servers.")
+# positional arguments
+parser.add_argument("operation",
+                    help="""The operation to execute. Valid operations are 'ls', 'rm', 'rmdir', 'mkdir', 'cp', 
+                    and 'mv'""")
+parser.add_argument("params", nargs='+',
+                    help='Parameters for the given operation. Will be one or two paths and/or URLs.')
+# optional arguments
+parser.add_argument("--verbose", "-v", action='store_true', dest="verbose", default=False,
+                    help="Print all messages to and from the FTP server")
+args = parser.parse_args()
+#######################################################################################################################
+
+
+#######################################################################################################################
+# assign parsed argument to local variables
+param1 = args.params[0]
+param2 = ""
+upload = False
+
+if len(args.params) > 1:
+    param2 = args.params[1]
+
+parsed_1 = urlparse(param1)
+parsed_2 = urlparse(param2)
+
+parsed_ftp_url = parsed_1
+parsed_file_path = parsed_2
+
+if parsed_1.scheme == "":
+    parsed_ftp_url = parsed_2
+    parsed_file_path = parsed_1
+    upload = True
+
+operation = args.operation
+request_end = '\r\n'
+
+# parse the url and assign them to their local variables
+user_parsed = parsed_ftp_url.username
+args_password = parsed_ftp_url.password
+args_path = parsed_ftp_url.path
+args_host = parsed_ftp_url.hostname
+args_port = parsed_ftp_url.port
+
+# update if default value is needed
+if parsed_ftp_url.username is None:
+    user_parsed = "anonymous"
+
+if parsed_ftp_url.password is None:
+    args_password = ""
+
+if args_port is None:
+    args_port = 21
+#######################################################################################################################
+# check the given message means success or not, if it represents an error, then exit the program
+list_of_operation = {'ls', 'rm', 'rmdir', 'mkdir', 'cp', 'mv'}
+
+
+def code_check(message):
+    error_number = {"4", "5", "6"}
+    if args.verbose:
+        print(message.decode().replace("\r\n", ""))
+
+    if message.decode()[0] in error_number:
+        if message != "426 Failure reading network stream.":
+            exit()
+
+
+#######################################################################################################################
+# determine if the operation is valid
+
+if operation not in list_of_operation:
+    raise ValueError("Not an valid operation argument")
+
+#######################################################################################################################
+# create socket
+control = socket.socket()
+control.settimeout(60)
+control.connect((args_host, args_port))
+socket_creation = control.recv(8192)
+code_check(socket_creation)
+
+#######################################################################################################################
+
+
+# connection setup
+setup_complete = False
+
+while not setup_complete:
+    # notify the server that we're switching to TLS mode
+    if user_parsed != "anonymous":
+        auth = "AUTH TLS\r\n"
+        control.sendall(auth.encode())
+        code_check(control.recv(8192))
+
+        # use ssl lib to warp the control socket
+        control = ssl.wrap_socket(control)
+
+    control.sendall(("USER " + user_parsed + "\r\n").encode())
+    control.recv(8192)
+
+    pwd = "PASS " + args_password + "\r\n"
+    control.sendall(pwd.encode())
+
+    # receive the authentication message and determine from the content if it's a success
+    auth_message = control.recv(8192).decode().replace("\r\n", "")
+
+    if auth_message == "230 Login successful.":
+        setup_complete = True
+        control.sendall("PBSZ 0\r\n".encode())
+        code_check(control.recv(8192))
+
+        control.sendall("PROT P\r\n".encode())
+        code_check(control.recv(8192))
+
+    else:
+        setup_complete = True
+        print(auth_message)
+        exit()
+
+
+# Set the connection to 8-bit binary data mode
+# Set the connection to stream mode
+# Set the connection to file-oriented mode
+def up_and_down_setup():
+    control.sendall("TYPE I\r\n".encode())
+    code_check(control.recv(8192))
+
+    control.sendall("MODE S\r\n\r\n".encode())
+    code_check(control.recv(8192))
+
+    control.sendall("STRU F\r\n\r\n\r\n".encode())
+    code_check(control.recv(8192))
+
+
+def close_channel(socket_to_close):
+    socket_to_close.sendall("QUIT\r\n".encode())
+
+
+def passive_channel():
+    control.sendall("PASV\r\n".encode())
+
+
+if operation == "mkdir":
+    MKD_message = "MKD " + args_path + "\r\n"
+    control.sendall(MKD_message.encode())
+    code_check(control.recv(8192))
+
+if operation == "rmdir":
+    RMD_message = "RMD " + args_path + "\r\n"
+    control.sendall(RMD_message.encode())
+    code_check(control.recv(8192))
+
+
+def open_data(message, opt):
+    # setup for the file transfer
+    up_and_down_setup()
+
+    # tell the server to switch to passive mode
+    passive_channel()
+
+    # receive message from server
+    message_received = control.recv(8192)
+    code_check(message_received)
+
+    # reformat the received message (read the ip and port)
+    message_decoded = message_received.decode().replace("\r\n", "")
+    port_ip_tuple = message_decoded[26:len(message_decoded) - 1]
+    data_tuple = literal_eval(port_ip_tuple)
+    data_list = [str(x) for x in data_tuple]
+    pasv_ip = '.'.join(data_list[:4])
+    pasv_port = (data_tuple[4] * 256) + data_tuple[5]
+
+    # Follow the step in "Supporting TLS on Data Channels" section
+    control.sendall(message.encode())
+    data = socket.socket()
+    data = ssl.wrap_socket(data)
+    data.settimeout(60)
+    data.connect((pasv_ip, pasv_port))
+
+    save_message = control.recv(8192)
+    code_check(save_message)
+
+    if opt == "ls":
+        print(data.recv(8192).decode())
+        close_channel(data)
+    if opt == "cp":
+        f = open(parsed_file_path.path, "rb")
+        content = f.read()
+        f.close()
+        data.sendall(content)
+        data.unwrap()
+        close_channel(data)
+    if opt == "cp_down":
+        receive_data = open(parsed_file_path.path, "wb")
+
+        # receive data while the file is not completely received
+        while str(receive_data.tell()).encode() + " bytes".encode() not in save_message:
+            receive_data.seek(0, os.SEEK_END)
+            receive_data.write(data.recv(8192))
+        close_channel(data)
+
+    data.close()
+    # print the final message from the control channel
+    code_check(control.recv(8192))
+
+
+# handle the list command
+if operation == "ls":
+    LIST_message = "LIST " + args_path + "\r\n"
+    open_data(LIST_message, "ls")
+
+# handle the remove command
+if operation == "rm":
+    DELE_message = "DELE " + args_path + "\r\n"
+    control.sendall(DELE_message.encode())
+    code_check(control.recv(8192))
+
+# handle the copy command
+if operation == "cp":
+    if upload:
+        CP_message_up = "STOR " + parsed_ftp_url.path + "\r\n"
+        open_data(CP_message_up, "cp")
+    else:
+        CP_message_down = "RETR " + parsed_ftp_url.path + "\r\n"
+        open_data(CP_message_down, "cp_down")
+
+# handle the move command
+# essentially copy the file to the destination and delete it from the source
+if operation == "mv":
+    if upload:
+        # download the file to the local folder
+        CP_message_up = "STOR " + parsed_ftp_url.path + "\r\n"
+        open_data(CP_message_up, "cp")
+
+        # remove the local file
+        os.remove(parsed_file_path.path)
+    else:
+        # transfer the file to the server
+        CP_message_down = "RETR " + parsed_ftp_url.path + "\r\n"
+        open_data(CP_message_down, "cp_down")
+
+        # remove the remote file once the transfer is complete
+        DELE_message = "DELE " + parsed_ftp_url.path + "\r\n"
+        control.sendall(DELE_message.encode())
+        code_check(control.recv(8192))
