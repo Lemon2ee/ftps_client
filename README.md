@@ -78,4 +78,51 @@ rm', 'rmdir', 'mkdir', 'cp', and 'mv')
 11. ./3700ftp -v cp ftps://notcorrect:notcorrect@ftp.3700.network/doesnotexist/codememe.png lol.png
     1. Expect the program to output the error code when verbose is enabled and exit since the password and username is
        not correct
+12. ./3700ftp ls ftps://wangyizho:[correct password]@ftp.3700.network:33334/
+    1. Expecting the program to timeout since the port number is not correct
+13. ./3700ftp -v ls ftps://wangyizho@ftp.3700.network/
+    1. Expect the program to timeout since the password is not given so the program sends the default password which
+       is ""
+14. ./3700ftp -v ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/
+    1. The program should not run since no operation was not given
+15. ./3700ftp ls ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network:33334/ lollol lol
+    1. Expect the program to throw an error since there are more than two arguments provided
+16. ./3700ftp mv ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/
+    1. Expect the program to throw an error since cp or mv requires at least two arguments
+17. ./3700ftp ls ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/doesnotexist.txt
+    1. Expect the program to return nothing (unless verbose is enabled) since the given path leads to a file
+18. ./3700ftp -v mkdir ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/doesnotexist.txt
+    1. Expect the program to return nothing and return 5xx message from the verbose mode since the given path is not a
+       directory path
+19. ./3700ftp -v rm ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/doesnotexist.txt
+    1. Expect the program to return nothing and return 5xx message from the verbose mode since the file does not exist
+20. ./3700ftp -v rm ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/mkdirTest
+    1. Expect the program to return nothing and return 5xx message from the verbose mode since the given path leads to a
+       directory
+21. ./3700ftp -v rmdir ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/hello.txt
+    1. expect the program to return nothing and return 5xx message from the verbose mode since the given path leads to a
+       file rather than directory
+22. ./3700ftp -v rmdir ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/mkdirTest
+    1. Expect the program to return nothing and return 5xx message from the verbose mode since the given directory
+       contains file
 
+Everything below should be tested with both rm and mv
+
+23. ./3700ftp -v cp/mv ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/hello.txt hello.txt (remote server have
+    the file)
+24. ./3700ftp -v cp/mv hello.txt ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/hello.txt (remote server does
+    not have the file)
+25. ./3700ftp -v cp/mv ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/koala.PNG koala.png (remote server should
+    have the image)
+26. ./3700ftp -v cp/mv koala.png ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/koala.PNG (local has the image,
+    remote server does not)
+27. ./3700ftp -v cp/mv lol.txt ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/koala.PNG (non exist local file,
+    should crash)
+28. ./3700ftp -v cp/mv ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/idkwhere.txt idk.txt (non exist remote
+    file, should crash)
+29. ./3700ftp -v cp/mv ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/koala.PNG koala.png (both remote and local
+    contain the file but should overwrite the local file)
+30. ./3700ftp -v cp/mv koala.png ftps://wangyizho:eQgHwyBOoi40Yjf6mAXR@ftp.3700.network/koala.PNG (both remote and local
+    contain the file but should overwrite the remote file)
+
+    

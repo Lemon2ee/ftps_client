@@ -29,9 +29,17 @@ args = parser.parse_args()
 param1 = args.params[0]
 param2 = ""
 upload = False
+operation = args.operation
+
+if operation in {'cp', 'mv'}:
+    if len(args.params) != 2:
+        raise ValueError("cp or mv requires at least two arguments")
 
 if len(args.params) > 1:
     param2 = args.params[1]
+
+if len(args.params) > 2:
+    raise ValueError("More than two arguments")
 
 parsed_1 = urlparse(param1)
 parsed_2 = urlparse(param2)
@@ -44,7 +52,6 @@ if parsed_1.scheme == "":
     parsed_file_path = parsed_1
     upload = True
 
-operation = args.operation
 request_end = '\r\n'
 
 # parse the url and assign them to their local variables
