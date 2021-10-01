@@ -89,8 +89,7 @@ if operation not in list_of_operation:
 control = socket.socket()
 control.settimeout(20)
 control.connect((args_host, args_port))
-socket_creation = control.recv(8192)
-code_check(socket_creation)
+code_check(control.recv(8192))
 
 #######################################################################################################################
 
@@ -106,10 +105,11 @@ while not setup_complete:
         code_check(control.recv(8192))
 
         # use ssl lib to warp the control socket
-        control = ssl.wrap_socket(control)
+        context = ssl.create_default_context()
+        control = context.wrap_socket(control, server_hostname=parsed_ftp_url.hostname)
 
     control.sendall(("USER " + user_parsed + "\r\n").encode())
-    control.recv(8192)
+    code_check(control.recv(8192))
 
     pwd = "PASS " + args_password + "\r\n"
     control.sendall(pwd.encode())
