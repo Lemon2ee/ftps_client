@@ -106,7 +106,7 @@ rm', 'rmdir', 'mkdir', 'cp', and 'mv')
     1. Expect the program to return nothing and return 5xx message from the verbose mode since the given directory
        contains file
 
-Everything below should be tested with both rm and mv
+Everything below should be tested with both rm and mv (in the correct condition)
 
 23. ./3700ftp -v cp/mv ftps://wangyizho:[correct password]@ftp.3700.network/hello.txt hello.txt (remote server have
     the file)
