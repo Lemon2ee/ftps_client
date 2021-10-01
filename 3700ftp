@@ -31,28 +31,31 @@ param2 = ""
 upload = False
 operation = args.operation
 
+# return exception when there are more or less than 2 parameters given
 if operation in {'cp', 'mv'}:
     if len(args.params) != 2:
         raise ValueError("cp or mv requires at least two arguments")
 
+# assign the param2 to the second parameter if it is provided
 if len(args.params) > 1:
     param2 = args.params[1]
 
+# if there are more than 2 parameters provided, throw an error
 if len(args.params) > 2:
     raise ValueError("More than two arguments")
 
+# parse the given parameters with urlparse
 parsed_1 = urlparse(param1)
 parsed_2 = urlparse(param2)
 
 parsed_ftp_url = parsed_1
 parsed_file_path = parsed_2
 
+# update the local variable to the correct value (corresponding to its name)
 if parsed_1.scheme == "":
     parsed_ftp_url = parsed_2
     parsed_file_path = parsed_1
     upload = True
-
-request_end = '\r\n'
 
 # parse the url and assign them to their local variables
 user_parsed = parsed_ftp_url.username
@@ -61,13 +64,15 @@ args_path = parsed_ftp_url.path
 args_host = parsed_ftp_url.hostname
 args_port = parsed_ftp_url.port
 
-# update if default value is needed
+# use anonymous if no username is provided
 if parsed_ftp_url.username is None:
     user_parsed = "anonymous"
 
+# use "" if no password is provided
 if parsed_ftp_url.password is None:
     args_password = ""
 
+# use port 21 if no port number is provided
 if args_port is None:
     args_port = 21
 #######################################################################################################################
@@ -75,27 +80,30 @@ if args_port is None:
 list_of_operation = {'ls', 'rm', 'rmdir', 'mkdir', 'cp', 'mv'}
 
 
+# Validate the given message
 def code_check(message):
     error_number = {"4", "5", "6"}
+    # output the given message if the verbose mode is enabled
     if args.verbose:
         print(message.decode().replace("\r\n", ""))
 
+    # throw exception if the message starts with 4, 5, 6 and exit immediately
     if message.decode()[0] in error_number:
-        if message != "426 Failure reading network stream.":
-            exit()
+        exit()
 
 
 #######################################################################################################################
 # determine if the operation is valid
-
 if operation not in list_of_operation:
     raise ValueError("Not an valid operation argument")
 
 #######################################################################################################################
-# create socket
+# create and connect socket
 control = socket.socket()
-control.settimeout(20)
+control.settimeout(10)
 control.connect((args_host, args_port))
+
+# receive the hello message
 code_check(control.recv(8192))
 
 #######################################################################################################################
@@ -115,15 +123,16 @@ while not setup_complete:
         context = ssl.create_default_context()
         control = context.wrap_socket(control, server_hostname=parsed_ftp_url.hostname)
 
+    # send the credentials
     control.sendall(("USER " + user_parsed + "\r\n").encode())
     code_check(control.recv(8192))
-
     pwd = "PASS " + args_password + "\r\n"
     control.sendall(pwd.encode())
 
     # receive the authentication message and determine from the content if it's a success
     auth_message = control.recv(8192).decode().replace("\r\n", "")
 
+    # Perform further setup if the login was successful
     if auth_message == "230 Login successful.":
         setup_complete = True
         control.sendall("PBSZ 0\r\n".encode())
@@ -132,6 +141,7 @@ while not setup_complete:
         control.sendall("PROT P\r\n".encode())
         code_check(control.recv(8192))
 
+    # exit the program when the login was not successful
     else:
         setup_complete = True
         print(auth_message)
@@ -152,25 +162,30 @@ def up_and_down_setup():
     code_check(control.recv(8192))
 
 
+# tell the server connected with the given socket to close
 def close_channel(socket_to_close):
     socket_to_close.sendall("QUIT\r\n".encode())
 
 
+# inform the control channel to enter passive mode
 def passive_channel():
     control.sendall("PASV\r\n".encode())
 
 
+# handle the mkdir operation
 if operation == "mkdir":
     MKD_message = "MKD " + args_path + "\r\n"
     control.sendall(MKD_message.encode())
     code_check(control.recv(8192))
 
+# handle the rmdir operation
 if operation == "rmdir":
     RMD_message = "RMD " + args_path + "\r\n"
     control.sendall(RMD_message.encode())
     code_check(control.recv(8192))
 
 
+# open the data channel and perform actions for the given operation (opt)
 def open_data(message, opt):
     # setup for the file transfer
     up_and_down_setup()
@@ -203,6 +218,7 @@ def open_data(message, opt):
     if opt == "ls":
         print(data.recv(8192).decode())
         close_channel(data)
+
     if opt == "cp":
         f = open(parsed_file_path.path, "rb")
         content = f.read()
@@ -210,6 +226,7 @@ def open_data(message, opt):
         data.sendall(content)
         data.unwrap()
         close_channel(data)
+
     if opt == "cp_down":
         receive_data = open(parsed_file_path.path, "wb")
 
