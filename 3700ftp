@@ -210,10 +210,9 @@ def open_data(message, opt):
     data = socket.socket()
     data = ssl.wrap_socket(data)
     data.settimeout(20)
-    data.connect((pasv_ip, pasv_port))
-
     save_message = control.recv(8192)
     code_check(save_message)
+    data.connect((pasv_ip, pasv_port))
 
     if opt == "ls":
         print(data.recv(8192).decode())
